@@ -1,0 +1,15 @@
+server {
+    listen *:80;
+    server_name one.ru;
+    root /usr/share/nginx/one.ru/html;
+    index index.html index.htm;
+    location / {}
+}
+
+server {
+    listen *:80;
+    server_name two.ru;
+    root /usr/share/nginx/two.ru/html;
+    index index.html index.htm;
+    location / {}
+}

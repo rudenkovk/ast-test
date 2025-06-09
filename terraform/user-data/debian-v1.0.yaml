@@ -1,0 +1,38 @@
+#cloud-config
+
+growpart:
+  mode: growpart
+  devices: ["/dev/sda2"]
+  ignore_growroot_disabled: false
+
+runcmd:
+  - [ pvresize, /dev/sda2 ]
+  - [ lvextend ,-l, +100%FREE, /dev/vg01/lv01 ]
+  - [ xfs_growfs, /dev/vg01/lv01 ]
+  - touch /tmp/cloud-init.file
+  - [ ssh-keygen, -A ]
+  # - echo "send dhcp-client-identifier = hardware;" >>/etc/dhcp/dhclient.conf
+  # - rm /var/lib/dhcp/*
+  # - systemctl restart networking
+
+ntp:
+  enabled: yes
+  ntp_client: systemd-timesyncd
+  servers:
+    - 10.20.1.2
+
+# user & groups
+ssh_pwauth: true
+disable_root: false
+
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens192:
+      dhcp4: true
+      dhcp-identifier: mac
+      dhcp6: false
+
+timezone: Europe/Moscow

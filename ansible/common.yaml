@@ -1,0 +1,171 @@
+- name: Common
+  hosts: all
+  gather_facts: true
+  become: yes
+  become_user: root
+  ignore_errors: true
+  ignore_unreachable: true
+  vars:
+    ca: "https://nexus.md.local/repository/public_certificates/full-cifrum-ca.pem"
+    ca_path: /usr/local/share/ca-certificates
+    # https://www.debian.org/mirror/list.ru.html
+    apt_mirror: "mirror.truenetwork.ru"
+
+
+  tasks:
+  #TODO: переделать на nexus и обновление ключей
+
+    - name: Creates /opt/docker-conts/external-certs/ directory
+      file:
+        path: /opt/docker-conts/external-certs/
+        state: directory
+
+    - name: Creates /opt/docker-conts/internal-certs/ directory
+      file:
+        path: /opt/docker-conts/internal-certs/
+        state: directory
+
+    - name: Download CA external certs
+      ansible.builtin.get_url:
+        url: "https://nexus.md.local/repository/public_certificates/dev.cifrum.local/{{item}}"
+        dest: "/opt/docker-conts/external-certs/{{item}}"
+        validate_certs: false
+      loop:
+        - certificate.pem
+        - certificate.key.pem
+        - root.crt
+        - CA-stand.pem
+        #- CA-git.pem
+
+    - name: Download CA internal certs
+      ansible.builtin.get_url:
+        url: "https://nexus.md.local/repository/public_certificates/pmd_local/{{item}}"
+        dest: "/opt/docker-conts/internal-certs/{{item}}"
+        validate_certs: false
+      loop:
+        - certificate.pem
+        - certificate.key.pem
+        - root.crt
+
+    - name: Download CA external certs 2
+      ansible.builtin.get_url:
+        url: "https://nexus.md.local/repository/public_certificates/md.local-CA.crt"
+        dest: "/opt/docker-conts/external-certs/{{item}}"
+        validate_certs: false
+      loop:
+        - CA-git.pem
+      #  - CA-stand.pem
+
+    - name: Add ansible user
+      ansible.builtin.user:
+        name: ansible
+        groups: sudo
+
+    - name: add sunny public key
+      ansible.posix.authorized_key:
+        user: sunny
+        state: present
+        key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDTm1Xy9jJICVYrVwurtwVqzjk+OBgDd57GoU7sdlSCVV9cyhI50hf6biHgONM061GUCjY57ooXRF8cvJWqKsQqH8fAhjAFjBTACvzknagBQdCQi+bSsKH29+D+EXpkxyzhMLcako9KWcgOokuNvgSrdrGY/duJxffsNo+pemBD/unBpT3XyyLMdksVOUHLh5otp/JytxAEt1UiupUvtKwxdtxJMmFAgzE+7Lm15ApKeRSDD4PspxYBfwDYuZLJiKzXubyfJwwjM36qIBhSqOnH2pa21N6L2CDreBBE3UgOEO/sK4eXgp4Ytz9ZpN9YZzapEkS8lOI+X5ixGLmvy2+A02MpsHh/TKurg0qXPnKx7RYnlGjoaJDZXFNfW3FT3cueFsZbg38NztmRmWCYCRjbExpyyxvmUQJmYo/Y+hgqyzt0abS/Rd3rm3FQ6pAzCcw8/TQtoIryKGgbMXNzJ3bsJfuA8FJ9aWa2jjox2G/Kyvh0ikMECRyy5YNEAWN2Ytk="
+
+    - name: add ansible public key
+      ansible.posix.authorized_key:
+        user: ansible
+        state: present
+        key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC4ThjtiIKW476ddxjKoMwUFrJSAM1qoeR5aAgzJ0IeWHvgqTS9hQNDrOBHqsvL5L2wne/NV6B19JHg31r5xpCdFaJxCWUYSSVNy0IogIY3+n6w7f8+n+u6Y5a/j7lMbrGqY1NPgz9iVss8exWXyDQ0cVrPpMf8tXoPIsk7nlFfVXlmvFaP6S67uZQyhJBW77c4PqWFtTBzIM0pRID5V5byZxZj3q36frdCW2ZvX5mCgi9yLs1/h9TG4D5gKDceEXDNRFul/1nZ5Q/1lnYTir9rkgR27Dt1EAQ9wsumAYyO2CxeJF6BCJnnY1CC/64GsafoYKsLEJsoToSn1Hq+Kz8gMtcIfEpV+nJ08uPua9oBPDInDobOgSpsjtcbvBYQhliuCl2dxX6bBsuYIKxFlAyEa4pj0O64jK2c+wJKu11Nzdd3DxPC0eFdq+MRj6NayFmp3LLOwi8ExroqNRCVNZN6P+bdQd9LWYhSWUNf/jjHiUPRqovyU0ZYtqcpmlRKTuE="
+
+    - name: download full-cifrum-ca
+      ansible.builtin.get_url:
+        url: "{{ ca }}"
+        dest: "{{ ca_path }}"
+        owner: root
+        group: root
+        mode: 0644
+        validate_certs: false
+      notify:
+        - update trusted ca debian
+
+    - name: Download CA external certs 2
+      ansible.builtin.get_url:
+        url: "https://nexus.md.local/repository/public_certificates/md.local-CA.crt"
+        dest: "{{ ca_path }}"
+        validate_certs: false
+      notify:
+        - update trusted ca debian
+
+    - name: Update sources.list
+      ansible.builtin.template:
+        src: sources.list.j2
+        dest: /etc/apt/sources.list
+
+    - name: Install Common Apt Packages
+      ansible.builtin.apt:
+        name:
+          - cloud-init
+          - xxd
+          - socat
+          - htop
+          - pwgen
+          - iotop
+          - parted
+          - python3
+          - python3-pip
+          - mc
+          - python3-dev
+          - build-essential
+          - vim
+          - git
+          - make
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - wget
+          - gnupg
+          - lsb-release
+          - acl
+          - sudo
+          - glances
+          - linux-image-6.1.0-26-amd64
+          - linux-headers-6.1.0-26-amd64
+        state: latest
+        update_cache: true
+
+    - name: debug kernel version
+      debug:
+        msg: "{{ ansible_kernel  }}"
+      when: ansible_kernel > "6.1.0-26-amd64"
+
+    - name: change default kernel
+      lineinfile:
+        path: /etc/default/grub
+        backup: yes
+        state: present
+        regexp: "^GRUB_DEFAULT=(.*)$"
+        line: "GRUB_DEFAULT=\"Advanced options for Debian GNU/Linux>Debian GNU/Linux, with Linux 6.1.0-26-amd64\""
+      when: (ansible_kernel > "6.1.0-26-amd64") and (ansible_os_family == "Debian")
+      notify:
+        - update grub
+        - reboot
+
+    - name: Create a new primary partition for LVM
+      community.general.parted:
+        label: gpt
+        name: linstore
+        device: /dev/sdb
+        flags: [ lvm ]
+        state: present
+        number: 1
+      when:
+        - ((inventory_hostname in groups["k8s-common-workers"]) or (inventory_hostname in groups["k8s-telemetry"]))
+
+  handlers:
+    - name: update trusted ca debian
+      shell: /usr/sbin/update-ca-certificates
+      when: ansible_os_family == "Debian"
+
+    - name: update grub
+      shell: update-grub
+      when: ansible_os_family == "Debian"
+
+    - name: reboot
+      ansible.builtin.reboot:
+      when: ansible_os_family == "Debian"

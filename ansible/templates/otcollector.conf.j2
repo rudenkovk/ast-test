@@ -1,0 +1,89 @@
+# {{ ansible_managed }}
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: {{ otcollector_reciver_endpoint }}:{{ otcollector_grps_port}}
+      http:
+        endpoint: {{ otcollector_reciver_endpoint }}:{{ otcollector_http_port }}
+
+extensions:
+  pprof:
+    endpoint: 0.0.0.0:1777
+  health_check:
+    endpoint: 0.0.0.0:13133
+  zpages:
+
+processors:
+  memory_limiter:
+    check_interval: {{ otcollector_memory_limit_check_interval }}
+    limit_mib: {{ otcollector_memory_limit }}
+
+  batch:
+    send_batch_size: {{ otcollector_batch_size }}
+    timeout: "{{ otcollector_batch_timeout }}"
+
+  attributes:
+    actions:
+      - key: server.name
+        value: {{ fqdn }}
+        action: insert
+
+  resource:
+    attributes:
+      - key: server.name
+        value: {{ fqdn }}
+        action: insert
+      - key: level
+        from_attribute: level
+        action: upsert
+      - key: severity.text
+        from_attribute: severity.text
+        action: upsert
+
+exporters:
+  otlp/2:
+    endpoint: "{{ otcollector_otlp_endpoint }}"
+    tls:
+      #insecure: true
+      insecure_skip_verify: true
+
+  otlphttp:
+    endpoint: "{{ otcollector_otlphttp_endpoint }}"
+    tls:
+      #insecure: true
+      insecure_skip_verify: true
+
+  debug:
+    verbosity: detailed
+
+
+service:
+  telemetry:
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+  pipelines:
+    traces:
+      receivers:
+       - otlp
+      processors:
+        - memory_limiter
+        - batch
+        - attributes
+        - resource
+      exporters:
+        - otlp/2
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+        - attributes
+        - resource
+      exporters:
+        - otlp/2

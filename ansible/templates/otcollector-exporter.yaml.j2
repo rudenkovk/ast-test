@@ -1,0 +1,34 @@
+# {{ ansible_managed }}
+
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: otcol-stands
+  namespace: d8-monitoring
+  labels:
+    prometheus: main
+spec:
+  # tlsConfig:
+  #   insecureSkipVerify: true
+  authorization:
+    credentials:
+      key: token
+      name: prometheus-token
+  honorLabels: true
+  scheme: HTTP
+  staticConfigs:
+{% for h in exporters %}
+  - targets:
+      - {{ h }}:8888
+    labels:
+      standName: {{ h }}
+{% endfor %}
+  relabelings:
+    - regex: endpoint|namespace|pod|service
+      action: labeldrop
+    - targetLabel: scrape_endpoint
+      replacement: main
+    - targetLabel: job
+      replacement: otcol-stands
+  metricsPath: '/metrics'

@@ -1,0 +1,53 @@
+---
+
+- name: Install nginx and to vh
+  hosts: nginx-sites
+
+  become: yes
+  become_user: root
+
+  vars:
+    nginx_conf_path: /etc/nginx
+    nginx_conf_file: nginx.conf
+    vh_conf_file: vh.conf
+    nginx_user: nginx
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.systemd:
+        name: nginx
+        daemon_reload: yes # обычно ствавлю по умолчанию, на случай изменения systemd юнитов. Потенциально может нести косяк при плохом взаимодействии между iac компонентами.
+        state: reloaded
+
+  tasks: 
+    - name: install nginx
+      ansible.builtin.package:
+        name: nginx
+        state: latest # косячный вариант, но для простоты.
+
+    - name: ensure nginx service is enabled and started
+      ansible.builtin.systemd:
+        name: nginx
+        enabled: yes
+        daemon_reload: yes
+        state: started
+
+    - name: update nginx.conf
+      ansible.builtin.template:
+        src: "{{ nginx_conf_file }}.j2"
+        dest: "{{ nginx_conf_path }}/{{ nginx_conf_file }}"
+        mode: "0644" # не уверен, но сути не меняет 
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_user }}"
+      notify:
+        - reload nginx
+
+    - name: update nginx vh
+      ansible.builtin.template:
+        src: "{{ vh_conf_file }}.j2"
+        dest: "{{ nginx_conf_path }}/{{ nginx_conf_file }}"
+        mode: "0644" # не уверен, но сути не меняет 
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_user }}"
+      notify:
+        - reload nginx

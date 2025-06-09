@@ -1,0 +1,149 @@
+---
+- name: Install/Update Node Exporter, PG Exporter and Cadvisor
+  hosts: debian_stands
+  roles:
+    - prometheus.prometheus.postgres_exporter
+    - prometheus.prometheus.node_exporter
+    - prometheus.prometheus.cadvisor
+  vars:
+    cadvisor_port: "9123"
+    node_exporter_tls_server_config:
+      cert_file: /opt/docker-conts/external-certs/certificate.pem
+      key_file: /opt/docker-conts/external-certs/certificate.key.pem
+    postgres_exporter_port: "9187"
+    postgres_exporter_name: "postgresql://postgres:PGSUPASS_{{ inventory_hostname }}@127.0.0.1:5432/postgres?sslmode=disable"
+    postgres_exporter_tls_server_config:
+      cert_file: /opt/docker-conts/external-certs/certificate.pem
+      key_file: /opt/docker-conts/external-certs/certificate.key.pem
+
+- name: Install/Update OT collector
+  hosts: debian_stands
+  become: yes
+  become_user: root
+  vars:
+    docker_hub: docker-common.md.local/library
+    otcollector_config_path: /etc/otcollector
+    otcollector_config_file: otcollector.conf
+    otcollector_grps_port: 4317
+    otcollector_http_port: 4318
+    otcollector_reciver_endpoint: 0.0.0.0
+    otcollector_memory_limit: 512 # в мегабайтах
+    otcollector_memory_limit_check_interval: 1s
+    otcollector_batch_size: 4096
+    otcollector_batch_timeout: 5s
+    otcollector_version: 0.117.0
+    otcollector_image: "otel/opentelemetry-collector-contrib:{{ otcollector_version }}"
+    otcollector_otlp_endpoint: ot-grpc-reciver.k8s.foundation.local:443
+    otcollector_otlphttp_endpoint: https://ot-reciver.k8s.foundation.local
+    otcollector_container_name: otcollector
+    otcollector_command: "--config={{ otcollector_config_path }}/{{ otcollector_config_file }}"
+
+  tasks:
+    - name: check OT collector config path is present
+      ansible.builtin.file:
+        path: "{{ otcollector_config_path }}"
+        state: directory
+
+    - name: Put config
+      ansible.builtin.template:
+        src: "{{ otcollector_config_file }}.j2"
+        dest: "{{ otcollector_config_path }}/{{ otcollector_config_file }}"
+
+    # - name: Remove depricated ot collector
+    #   community.docker.docker_container:
+    #     cleanup: true
+    #     name: ot-collector
+    #     state: absent
+
+    - name: Install/Update ot collector container
+      community.docker.docker_container:
+        name: "{{ otcollector_container_name }}"
+        image: "{{ otcollector_image }}"
+        command: "{{ otcollector_command }}"
+        state: started
+        restart_policy: always
+        restart: yes
+        volumes:
+          - "{{ otcollector_config_path }}/{{ otcollector_config_file }}:{{ otcollector_config_path }}/{{ otcollector_config_file }}"
+        ports:
+          - "{{ otcollector_grps_port }}:{{ otcollector_grps_port }}"
+          - "{{ otcollector_http_port }}:{{ otcollector_http_port }}"
+          - 1777:1777
+          - 13133:13133
+          - 8888:8888
+        exposed_ports:
+          - "{{ otcollector_grps_port }}:{{ otcollector_grps_port }}"
+          - "{{ otcollector_http_port }}:{{ otcollector_http_port }}"
+          - 1777:1777
+          - 13133:13133
+          - 8888:8888
+
+# - name: Install/Update kminion
+#   hosts: debian_stands
+#   become: yes
+#   become_user: root
+#   vars:
+#     kminion_config_path: /etc/exporters/kminion
+#     kminion_config_file: config.yaml
+
+#   tasks:
+#     - name: check kminion config path is present
+#       ansible.builtin.file:
+#         path: "{{ kminion_config_path }}"
+#         state: directory
+
+#     - name: Put config
+#       ansible.builtin.template:
+#         src: "kminion-{{ kminion_config_file }}.j2"
+#         dest: "{{ kminion_config_path }}/{{ kminion_config_file }}"
+
+#     - name: Remove depricated ot collector
+#       community.docker.docker_container:
+#         cleanup: true
+#         name: ot-collector
+#         state: absent
+
+#     - name: Install/Update ot collector container
+#       community.docker.docker_container:
+#         name: "{{ kminion_container_name }}"
+#         image: "{{ kminion_image }}"
+#         command: "{{ kminion_command }}"
+#         state: started
+#         restart_policy: always
+#         restart: yes
+#         volumes:
+#           - "{{ kminion_config_path }}:{{ kminion_config_path }}"
+#         ports:
+#           - "{{ kminion_grps_port }}"
+#           - "{{ kminion_http_port }}"
+
+
+- name: Create k8s manifests for exporters
+  hosts: debian_stands
+  vars:
+    cadvisor_port: "9123"
+    etcd_port: "2379"
+    postgres_exporter_port: "9187"
+    kminion_port: "18080"
+
+  tasks:
+    - name: Get fqdn list
+      ansible.builtin.set_fact:
+        exporters: "{{ ansible_play_hosts_all | map('extract', hostvars, 'fqdn') }}"
+      delegate_to: localhost
+      run_once: yes
+
+    - name: Create k8s manifests for exporters
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "../{{ item }}"
+      loop:
+        - cadvisor-exporter.yaml
+        - etcd-exporter.yaml
+        - kafka-exporter.yaml
+        - node-exporter.yaml
+        - otcollector-exporter.yaml
+        - postgres-exporter.yaml
+      delegate_to: localhost
+      run_once: yes
+

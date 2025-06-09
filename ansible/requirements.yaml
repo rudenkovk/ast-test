@@ -1,0 +1,10 @@
+collections:
+  - name: prometheus.prometheus
+#   - name: community.postgresql
+#   - name: ansible.posix
+#   - name: community.docker
+#   - name: community.general
+
+#roles:
+#   - name: jdauphant.nginx
+#  - name: prometheus.prometheus.node_exporter

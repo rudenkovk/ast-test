@@ -1,0 +1,34 @@
+# {{ ansible_managed }}
+
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: cadvisor-stands
+  namespace: d8-monitoring
+  labels:
+    prometheus: main
+spec:
+  # tlsConfig:
+  #   insecureSkipVerify: true
+  authorization:
+    credentials:
+      key: token
+      name: prometheus-token
+  honorLabels: true
+  scheme: HTTP
+  staticConfigs:
+{% for h in exporters %}
+  - targets:
+      - {{ h }}:{{ cadvisor_port}}
+    labels:
+      standNode: {{ h }}
+{% endfor %}
+  relabelings:
+    - regex: endpoint|namespace|pod|service
+      action: labeldrop
+    - targetLabel: scrape_endpoint
+      replacement: main
+    - targetLabel: job
+      replacement: kube-state-metrics
+  metricsPath: '/metrics'

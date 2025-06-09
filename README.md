@@ -1,4 +1,4 @@
-[[TOC]]
+[[__TOC__]]
 
 # подготовка ansible
 Установить нужные коллекции (или через requirements.yaml)
@@ -24,7 +24,6 @@ ansible-playbook telemetry.yml -i terraform.yml --extra-vars=\"ansible_password=
 cd ansible
 ansible-playbook telemetry.yml -i nginx-method01.yml --extra-vars=\"ansible_password='pZAIHz5k71LyUbTD'\" --extra-vars=\"ansible_become_password='pZAIHz5k71LyUbTD'
 ```
-
 
 # установка nginx сырым плейбуком 
 ```
